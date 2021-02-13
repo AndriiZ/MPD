@@ -1,5 +1,5 @@
 /*
- * Copyright 2007-2019 Content Management AG
+ * Copyright 2007-2021 CM4all GmbH
  * All rights reserved.
  *
  * author: Max Kellermann <mk@cm4all.com>
@@ -30,43 +30,46 @@
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef TIME_CONVERT_HXX
-#define TIME_CONVERT_HXX
+#include "Loop.hxx"
+#include "FineTimerEvent.hxx"
 
-#include <chrono>
+constexpr bool
+TimerList::Compare::operator()(const FineTimerEvent &a,
+			       const FineTimerEvent &b) const noexcept
+{
+	return a.due < b.due;
+}
 
-/**
- * Convert a UTC-based time point to a UTC-based "struct tm".
- *
- * Throws on error.
- */
-struct tm
-GmTime(std::chrono::system_clock::time_point tp);
+TimerList::TimerList() = default;
 
-/**
- * Convert a UTC-based time point to a local "struct tm".
- *
- * Throws on error.
- */
-struct tm
-LocalTime(std::chrono::system_clock::time_point tp);
+TimerList::~TimerList() noexcept
+{
+	assert(timers.empty());
+}
 
-/**
- * Convert a UTC-based "struct tm" to a UTC-based time point.
- */
-[[gnu::pure]]
-std::chrono::system_clock::time_point
-TimeGm(struct tm &tm) noexcept;
+void
+TimerList::Insert(FineTimerEvent &t) noexcept
+{
+	timers.insert(t);
+}
 
-/**
- * Convert a local "struct tm" to a UTC-based time point.
- */
-[[gnu::pure]]
-std::chrono::system_clock::time_point
-MakeTime(struct tm &tm) noexcept;
+Event::Duration
+TimerList::Run(const Event::TimePoint now) noexcept
+{
+	while (true) {
+		auto i = timers.begin();
+		if (i == timers.end())
+			break;
 
-[[gnu::pure]]
-std::chrono::steady_clock::duration
-ToSteadyClockDuration(const struct timeval &tv) noexcept;
+		auto &t = *i;
+		const auto timeout = t.due - now;
+		if (timeout > timeout.zero())
+			return timeout;
 
-#endif
+		timers.erase(i);
+
+		t.Run();
+	}
+
+	return Event::Duration(-1);
+}

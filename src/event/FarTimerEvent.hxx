@@ -1,5 +1,5 @@
 /*
- * Copyright 2007-2019 Content Management AG
+ * Copyright 2007-2021 CM4all GmbH
  * All rights reserved.
  *
  * author: Max Kellermann <mk@cm4all.com>
@@ -30,43 +30,19 @@
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef TIME_CONVERT_HXX
-#define TIME_CONVERT_HXX
+#pragma once
 
-#include <chrono>
+#include "FineTimerEvent.hxx"
 
 /**
- * Convert a UTC-based time point to a UTC-based "struct tm".
+ * A coarse timer event which schedules far into the future.  Use this
+ * when you need a coarse resolution, but the supported time span of
+ * #CoarseTimerEvent is not enough.  For example, a good use case is
+ * timers which fire only every few minutes and do periodic cleanup.
  *
- * Throws on error.
+ * Right now, this is just an alias for #FineTimerEvent.  This class
+ * supports arbitrary time spans, but uses a high-resolution timer.
+ * Eventually, we may turn this into a timer wheel with minute
+ * resolution.
  */
-struct tm
-GmTime(std::chrono::system_clock::time_point tp);
-
-/**
- * Convert a UTC-based time point to a local "struct tm".
- *
- * Throws on error.
- */
-struct tm
-LocalTime(std::chrono::system_clock::time_point tp);
-
-/**
- * Convert a UTC-based "struct tm" to a UTC-based time point.
- */
-[[gnu::pure]]
-std::chrono::system_clock::time_point
-TimeGm(struct tm &tm) noexcept;
-
-/**
- * Convert a local "struct tm" to a UTC-based time point.
- */
-[[gnu::pure]]
-std::chrono::system_clock::time_point
-MakeTime(struct tm &tm) noexcept;
-
-[[gnu::pure]]
-std::chrono::steady_clock::duration
-ToSteadyClockDuration(const struct timeval &tv) noexcept;
-
-#endif
+using FarTimerEvent = FineTimerEvent;

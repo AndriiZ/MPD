@@ -1,5 +1,5 @@
 /*
- * Copyright 2007-2019 Content Management AG
+ * Copyright 2007-2021 CM4all GmbH
  * All rights reserved.
  *
  * author: Max Kellermann <mk@cm4all.com>
@@ -30,43 +30,30 @@
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef TIME_CONVERT_HXX
-#define TIME_CONVERT_HXX
+#include "FineTimerEvent.hxx"
+#include "Loop.hxx"
 
-#include <chrono>
+void
+FineTimerEvent::Schedule(Event::Duration d) noexcept
+{
+	Cancel();
 
-/**
- * Convert a UTC-based time point to a UTC-based "struct tm".
- *
- * Throws on error.
- */
-struct tm
-GmTime(std::chrono::system_clock::time_point tp);
+	due = loop.SteadyNow() + d;
+	loop.Insert(*this);
+}
 
-/**
- * Convert a UTC-based time point to a local "struct tm".
- *
- * Throws on error.
- */
-struct tm
-LocalTime(std::chrono::system_clock::time_point tp);
+void
+FineTimerEvent::ScheduleEarlier(Event::Duration d) noexcept
+{
+	const auto new_due = loop.SteadyNow() + d;
 
-/**
- * Convert a UTC-based "struct tm" to a UTC-based time point.
- */
-[[gnu::pure]]
-std::chrono::system_clock::time_point
-TimeGm(struct tm &tm) noexcept;
+	if (IsPending()) {
+		if (new_due >= due)
+			return;
 
-/**
- * Convert a local "struct tm" to a UTC-based time point.
- */
-[[gnu::pure]]
-std::chrono::system_clock::time_point
-MakeTime(struct tm &tm) noexcept;
+		Cancel();
+	}
 
-[[gnu::pure]]
-std::chrono::steady_clock::duration
-ToSteadyClockDuration(const struct timeval &tv) noexcept;
-
-#endif
+	due = new_due;
+	loop.Insert(*this);
+}

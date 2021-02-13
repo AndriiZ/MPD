@@ -1,5 +1,5 @@
 /*
- * Copyright 2007-2019 Content Management AG
+ * Copyright 2007-2021 CM4all GmbH
  * All rights reserved.
  *
  * author: Max Kellermann <mk@cm4all.com>
@@ -30,43 +30,46 @@
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef TIME_CONVERT_HXX
-#define TIME_CONVERT_HXX
+#pragma once
 
-#include <chrono>
+#include "Chrono.hxx"
+#include "util/IntrusiveList.hxx"
 
-/**
- * Convert a UTC-based time point to a UTC-based "struct tm".
- *
- * Throws on error.
- */
-struct tm
-GmTime(std::chrono::system_clock::time_point tp);
+#include <boost/intrusive/set.hpp>
+
+class FineTimerEvent;
 
 /**
- * Convert a UTC-based time point to a local "struct tm".
- *
- * Throws on error.
+ * A list of #FineTimerEvent instances sorted by due time point.
  */
-struct tm
-LocalTime(std::chrono::system_clock::time_point tp);
+class TimerList final {
+	struct Compare {
+		constexpr bool operator()(const FineTimerEvent &a,
+					  const FineTimerEvent &b) const noexcept;
+	};
 
-/**
- * Convert a UTC-based "struct tm" to a UTC-based time point.
- */
-[[gnu::pure]]
-std::chrono::system_clock::time_point
-TimeGm(struct tm &tm) noexcept;
+	boost::intrusive::multiset<FineTimerEvent,
+				   boost::intrusive::base_hook<boost::intrusive::set_base_hook<boost::intrusive::link_mode<boost::intrusive::auto_unlink>>>,
+				   boost::intrusive::compare<Compare>,
+				   boost::intrusive::constant_time_size<false>> timers;
 
-/**
- * Convert a local "struct tm" to a UTC-based time point.
- */
-[[gnu::pure]]
-std::chrono::system_clock::time_point
-MakeTime(struct tm &tm) noexcept;
+public:
+	TimerList();
+	~TimerList() noexcept;
 
-[[gnu::pure]]
-std::chrono::steady_clock::duration
-ToSteadyClockDuration(const struct timeval &tv) noexcept;
+	TimerList(const TimerList &other) = delete;
+	TimerList &operator=(const TimerList &other) = delete;
 
-#endif
+	bool IsEmpty() const noexcept {
+		return timers.empty();
+	}
+
+	void Insert(FineTimerEvent &t) noexcept;
+
+	/**
+	 * Invoke all expired #FineTimerEvent instances and return the
+	 * duration until the next timer expires.  Returns a negative
+	 * duration if there is no timeout.
+	 */
+	Event::Duration Run(Event::TimePoint now) noexcept;
+};
